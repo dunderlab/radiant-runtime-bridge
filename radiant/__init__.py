@@ -1,5 +1,5 @@
 from http.server import ThreadingHTTPServer
-from typing import Any, Dict, Type, Callable
+from typing import Any, Dict, Type, Callable, Optional
 
 from radiant.server import RequestHandler, DEFAULT_CONFIG
 from radiant.fake import *
@@ -28,6 +28,7 @@ class AutoHTTPServer(ThreadingHTTPServer):
 class BrythonServer:
     """Minimal threaded HTTP server wrapper with shared configuration."""
 
+    styles = []
     get_routes = {}
     post_routes = {}
     html_routes = {}
@@ -40,10 +41,10 @@ class BrythonServer:
         if ":" in ip:
             ip = f"[{ip}]"
 
-        if ip in ['[::1]', '127.0.0.1']:
-            localhost = f'(http://localhost:{port}/)'
+        if ip in ["[::1]", "127.0.0.1"]:
+            localhost = f"(http://localhost:{port}/)"
         else:
-            localhost = ''
+            localhost = ""
 
         print("=" * 70)
         print(f"[{ts}] SERVER BOOT")
@@ -105,6 +106,7 @@ class BrythonServer:
         *,
         ip: str = "::1",
         port: int = 5050,
+        dist: Optional[str] = None,
     ) -> None:
         """
         Start a threaded HTTP server instance.
@@ -128,6 +130,7 @@ class BrythonServer:
         ValueError
             If the port is not a positive integer.
         """
+
         if not isinstance(port, int) or port <= 0:
             raise ValueError("port must be a positive integer")
 
@@ -138,6 +141,7 @@ class BrythonServer:
             **config,
         }
 
+        server.generate_dist = dist
         server.get_routes = cls.get_routes
         server.post_routes = cls.post_routes
         server.html_routes = cls.html_routes

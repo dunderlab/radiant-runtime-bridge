@@ -1,23 +1,25 @@
 import json
 import mimetypes
 import os
+import shutil
+import subprocess
 import sys
 from collections import defaultdict
 from http.server import BaseHTTPRequestHandler
+from pathlib import Path
 from string import Template
 from typing import Any, Dict, Iterable, Optional
 from urllib.parse import urlparse, parse_qs
 
+BASE_DIR: Path = Path(__file__).resolve().parent
 
-BASE_DIR: str = os.path.dirname(__file__)
-
-STATIC_DIRS: list[str] = [
-    os.path.join(BASE_DIR, "static"),
-    os.path.join(BASE_DIR, "static", "modules"),
-    sys.path[0],
+STATIC_DIRS: list[Path] = [
+    BASE_DIR / "static",
+    BASE_DIR / "static" / "modules",
+    Path(sys.path[0]),
 ]
 
-TEMPLATES_DIR: str = os.path.join(BASE_DIR, "templates")
+TEMPLATES_DIR: Path = BASE_DIR / "templates"
 
 
 DEFAULT_CONFIG: dict[str, Any] = {
@@ -46,10 +48,8 @@ def render_template(name: str, context: Dict[str, Any]) -> bytes:
     bytes
         Rendered template encoded as UTF-8.
     """
-    path = os.path.join(TEMPLATES_DIR, name)
-
-    with open(path, "r", encoding="utf-8") as file:
-        template = Template(file.read())
+    path = TEMPLATES_DIR / name
+    template = Template(path.read_text(encoding="utf-8"))
 
     # Default missing keys to empty strings
     rendered = template.safe_substitute(defaultdict(str, context))
@@ -169,6 +169,82 @@ class RequestHandler(BaseHTTPRequestHandler):
                     "call": "__init__",
                 },
             )
+
+            if self.server.generate_dist:
+
+                dist_path = Path(self.server.generate_dist)
+                if dist_path.exists():
+                    shutil.rmtree(dist_path)
+                dist_path.mkdir(parents=True, exist_ok=True)
+
+                # Generate index.html
+                (dist_path / "index.html").write_text(
+                    html.decode("utf-8"), encoding="utf-8"
+                )
+
+                # Copy Brython package
+                (dist_path / "brython").mkdir(parents=True, exist_ok=True)
+                shutil.copytree(
+                    BASE_DIR
+                    / "static"
+                    / "brython"
+                    / f"Brython-{DEFAULT_CONFIG['brython_version']}",
+                    dist_path
+                    / "brython"
+                    / f"Brython-{DEFAULT_CONFIG['brython_version']}",
+                )
+
+                # Generate main package
+                app_dir = Path(sys.argv[0]).resolve().parent
+                subprocess.run(
+                    [
+                        "brython-cli",
+                        "make_package",
+                        getattr(self.server, "config", {})["package"],
+                    ],
+                    cwd=app_dir,
+                    capture_output=True,
+                    text=True,
+                )
+                shutil.move(
+                    app_dir
+                    / f"{getattr(self.server, 'config', {})['package']}.brython.js",
+                    dist_path,
+                )
+
+                # Copy Radiant package
+                modules_dir = BASE_DIR / "static" / "modules"
+                subprocess.run(
+                    [
+                        "brython-cli",
+                        "make_package",
+                        "radiant",
+                    ],
+                    cwd=modules_dir,
+                    capture_output=True,
+                    text=True,
+                )
+                shutil.move(
+                    modules_dir / "radiant.brython.js",
+                    dist_path,
+                )
+
+                # Copy Static paths
+
+                static_dir = dist_path / "static"
+                if static_dir.exists():
+                    shutil.rmtree(static_dir)
+                static_dir.mkdir(parents=True, exist_ok=True)
+
+                for static in self.server.config.get("static", []):
+
+                    for item in (app_dir / static).iterdir():
+                        target = dist_path / "static" / item.name
+                        if item.is_dir():
+                            shutil.copytree(item, target, dirs_exist_ok=True)
+                        else:
+                            shutil.copy2(item, target)
+
             self._send(200, html, "text/html")
             return
 
@@ -179,7 +255,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                 {
                     **DEFAULT_CONFIG,
                     **getattr(self.server, "config", {}),
-                    "root_file": os.path.splitext(os.path.basename(sys.argv[0]))[0],
+                    "root_file": Path(sys.argv[0]).stem,
                     "call": route.__name__,
                 },
             )
@@ -191,14 +267,14 @@ class RequestHandler(BaseHTTPRequestHandler):
         requested_path = parsed.path.lstrip("/")
 
         for static_dir in STATIC_DIRS + self.server.config.get("static", []):
-            base = os.path.abspath(static_dir)
-            candidate = os.path.abspath(os.path.join(base, requested_path))
+            base = Path(static_dir).resolve()
+            candidate = (base / requested_path).resolve()
 
             # Hardened directory traversal prevention
-            if not candidate.startswith(base + os.sep):
+            if not candidate.is_relative_to(base):
                 continue
 
-            if os.path.isfile(candidate):
+            if candidate.is_file():
                 self._serve_file(candidate)
                 return
 

@@ -26,11 +26,17 @@
     <!--Brython-->
     <script type="text/javascript" src="$domain/brython/Brython-$brython_version/brython.js"></script>
     <script type="text/javascript" src="$domain/brython/Brython-$brython_version/brython_stdlib.js"></script>
+
+    <script type="text/javascript" src="./radiant.brython.js"></script>
+    <script type="text/javascript" src="./$package.brython.js"></script>
+
     <brython-options debug="$debug_level" cache="true"></brython-options>
 
     <script type="text/python">
         import sys
-        from fake import Fake
+
+        if $mock_imports:
+            from fake import Fake
 
         for module in $mock_imports:
             sys.modules[module] = Fake()
@@ -45,7 +51,6 @@
 
 <body onload="brython({pythonpath: $path})">
 </body>
-
 
 
 </html>

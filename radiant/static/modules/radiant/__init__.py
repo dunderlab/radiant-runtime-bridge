@@ -197,6 +197,9 @@ class BrythonServer:
         document.select("head")[0] <= html.LINK(
             href=file, type="text/css", rel="stylesheet"
         )
+        document.select("head")[0] <= html.LINK(
+            href=f"static/{file}", type="text/css", rel="stylesheet"
+        )
 
 
 json_response = Fake()
