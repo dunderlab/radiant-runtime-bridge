@@ -10,10 +10,10 @@ readme = "README.md"
 requires-python = ">=3.8"
 license = { text = "BSD-2-Clause" }
 authors = [
-    { name = "Yeison Cardona", email = "yencardonaal@unal.edu.co" },
+    { name = "Yeison Cardona", email = "yeisoneng@gmail.com" },
 ]
 maintainers = [
-    { name = "Yeison Cardona", email = "yencardonaal@unal.edu.co" },
+    { name = "Yeison Cardona", email = "yeisoneng@gmail.com" },
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",
