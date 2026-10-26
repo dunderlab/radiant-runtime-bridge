@@ -1,0 +1,64 @@
+name: Auto Release
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'pyproject.toml' # Only runs if this file changes
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions: # IMPORTANT: Allows the workflow to write the tag and the release
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Required to handle tags correctly
+
+      - name: Extract version from pyproject.toml
+        id: get_version
+        run: |
+          # Busca la línea que dice 'version = "X.Y.Z"' y extrae el valor entre comillas
+          VERSION=$(grep 'version =' pyproject.toml | cut -d '"' -f 2)
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "Version found: $VERSION"
+
+      - name: Configure Git
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Create and push Tag
+        run: |
+          # Crea el tag vX.Y.Z y lo sube al repo
+          git tag v${{ env.VERSION }}
+          git push origin v${{ env.VERSION }}
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # 1. Create a temporary file with your professional message
+          cat <<EOF > release_intro.md
+          # Radiant: Unified Python and Brython Runtime
+
+          ### **Build web apps in 100% pure Python. No JavaScript. Single-file execution.**
+
+          Radiant is a single-file runtime bridge that blurs the line between server and browser. 
+          It encapsulates your entire stack into a single Python script, allowing you to write frontend 
+          logic with Brython as if it were running natively in the browser, while maintaining a 
+          transparent connection to the backend.
+          
+          ---
+          EOF
+          
+          # 2. Use --notes-file to load that message and --generate-notes to append the changelog below
+          gh release create v${{ env.VERSION }} \
+            --title "Radiant v${{ env.VERSION }}" \
+            --notes-file release_intro.md \
+            --generate-notes \
+            --draft
